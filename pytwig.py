@@ -25,12 +25,42 @@ def main(argv=sys.argv[1:]):
     cat_file_command.add_argument('object', help='The object to display (e.g., a commit, tree, or blob)')
 
     # Add the 'hash-object' command
+    # This command computes the object ID for a file and stores it in the repository
+    hash_object_command = commands.add_parser('hash-object', help='Compute the object ID for a file and store it in the repository')
+    hash_object_command.add_argument("-w", "--write", action="store_true", help='to write the object to the repository')
+    hash_object_command.add_argument("path", nargs='?', help='The path to the file to hash')
+
+    # Add the 'hash-object' command
     args = parser.parse_args(argv)
     if args.command == 'init':
         repo_create(os.getcwd())
     elif args.command == 'cat-file':
         obj = object_read(args.object)
         sys.stdout.buffer.write(obj["data"])
+    elif args.command == 'hash-object':
+        if args.path:
+            with open(args.path, 'rb') as f:
+                data = f.read()
+        else:
+            data = sys.stdin.buffer.read()
+        obj = object_hash(data, "blob", write=args.write)
+        print(obj)
+
+def object_hash(data, fmt, write=False):
+    header = f"{fmt} {len((data))}\0".encode()
+    full_data = header + data
+
+    sha = hashlib.sha1(full_data).hexdigest()
+
+    if write:
+        path = os.path.join('.twig', 'objects', sha[:2])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        full_path = os.path.join(path, sha[2:])
+        if not os.path.exists(full_path):
+            compressed_data = zlib.compress(full_data)
+            with open(full_path, 'wb') as f:
+                f.write(compressed_data)
+    return sha
 
 def object_read(sha):
     path = os.path.join('.twig', 'objects', sha[:2], sha[2:])
