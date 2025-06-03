@@ -30,6 +30,10 @@ def main(argv=sys.argv[1:]):
     hash_object_command.add_argument("-w", "--write", action="store_true", help='to write the object to the repository')
     hash_object_command.add_argument("path", nargs='?', help='The path to the file to hash')
 
+    # Add the 'write-tree' command
+    write_tree_command = commands.add_parser('write-tree', help='Create a tree object from the working directory')
+
+
     # Add the 'hash-object' command
     args = parser.parse_args(argv)
     if args.command == 'init':
@@ -45,6 +49,8 @@ def main(argv=sys.argv[1:]):
             data = sys.stdin.buffer.read()
         obj = object_hash(data, "blob", write=args.write)
         print(obj)
+    elif args.command == 'write-tree':
+        print(write_tree())
 
 def object_hash(data, fmt, write=False):
     header = f"{fmt} {len((data))}\0".encode()
@@ -103,6 +109,30 @@ def repo_create(path):
     print(f"Initialized empty twig repository in {git_dir}")
 
 
+def write_tree(directory="."):
+    entries = []
+
+    for entry in sorted(os.listdir(directory)):
+        print(entry)
+        if entry == ".twig":
+            continue
+
+        full_path = os.path.join(directory, entry)
+
+        if os.path.isdir(full_path):
+            sha = write_tree(full_path)
+            mode = "40000"  # Tree mode
+        else:
+            with open(full_path, "rb") as f:
+                data = f.read()
+            sha = object_hash(data, "blob", write=True)
+            mode = "100644"  # Regular file mode
+
+        entry_line = f"{mode} {entry}".encode() + b"\x00" + bytes.fromhex(sha)
+        entries.append(entry_line)
+
+    tree_data = b"".join(entries)
+    return object_hash(tree_data, "tree", write=True)
 
 
 
